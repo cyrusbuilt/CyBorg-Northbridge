@@ -11,5 +11,4 @@
 .DS_Store
 
 # Don't currently need these
-lib/
 test/
