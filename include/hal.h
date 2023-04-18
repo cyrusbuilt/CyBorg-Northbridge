@@ -2,10 +2,13 @@
 #define _HAL_H
 
 #include <Arduino.h>
+#include "PetitFS.h"
 
 /**
  * @brief Hardware definitions for base system.
  */
+
+#define SERIAL_BAUD_RATE 115200  // BAUD rate for the Serial port.
 
 // Z80 data bus
 #define PIN_D0 24      // PA0 pin 40
@@ -71,7 +74,7 @@
 /**
  * @brief File names and starting addresses
  */
-
+#define ZERO_ADDR 0x0000
 #define BASICFN "BASIC47.BIN"
 #define FORTHFN "FORTH13.BIN"
 #define CPMFN "CPM22.BIN"
@@ -81,13 +84,24 @@
 #define AUTOFN "AUTOBOOT.BIN"
 #define Z80DISK "DSxNyy.DSK"
 #define DS_OSNAME "DSxNAM.DAT"
-#define BASSTRADDR 0x0000
+#define BASSTRADDR ZERO_ADDR
 #define FORSTRADDR 0x0100
 #define CPM22CBASE 0xD200
 #define CPMSTRADDR (CPM22CBASE - 32)
 #define QPMSTRADDR 0x80
-#define CPM3STRADDR 0x0000
-#define AUTSTRADDR 0x0000
+#define CPM3STRADDR ZERO_ADDR
+#define UCSDSTRADDR ZERO_ADDR
+#define AUTSTRADDR ZERO_ADDR
+
+#define MAX_TRACKS 512
+#define MAX_SECTORS 32
+
+#define KEY_CODE_CR 13
+#define KEY_CODE_ESC 27
+
+#define OS_MEM_BANK_0 0
+#define OS_MEM_BANK_1 1
+#define OS_MEM_BANK_2 2
 
 /**
  * @brief Clock speed check
@@ -101,8 +115,131 @@
 	#define CLOCK_HIGH "8"
 #endif
 
+/**
+ * @brief 
+ * 
+ */
+enum class DebugMode : uint8_t {
+  OFF = 0,
+  ON = 1,
+  TRACE = 2
+};
+
+/**
+ * @brief 
+ * 
+ * @param numPulse 
+ */
+void pulseClock(byte numPulse);
+
+/**
+ * @brief 
+ * 
+ */
+void singlePulseResetZ80();
+
+/**
+ * @brief 
+ * 
+ * @param value 
+ */
+void loadHL(word value);
+
+/**
+ * @brief 
+ * 
+ * @param value 
+ */
+void loadByteToRAM(byte value);
+
+/**
+ * @brief 
+ * 
+ * @param value 
+ */
 void printBinaryByte(byte value);
+
+/**
+ * @brief 
+ * 
+ * @param intFlagUsed 
+ */
 void serialEvent(bool intFlagUsed);
+
+/**
+ * @brief 
+ * 
+ */
+void flushSerialRXBuffer();
+
+/**
+ * @brief 
+ * 
+ * @param timestamp 
+ */
 void blinkIOSled(unsigned long *timestamp);
+
+/**
+ * @brief 
+ * 
+ * @param fatfs 
+ * @return byte
+ */
+byte mountSD(FATFS* fatfs);
+
+/**
+ * @brief 
+ * 
+ * @param fileName 
+ * @return byte 
+ */
+byte openSD(const char* fileName);
+
+/**
+ * @brief 
+ * 
+ * @param buffSD 
+ * @param readBytes 
+ * @return byte 
+ */
+byte readSD(void* buffSD, byte* readBytes);
+
+/**
+ * @brief 
+ * 
+ * @param secNum 
+ * @return byte 
+ */
+byte seekSD(word sectNum);
+
+/**
+ * @brief 
+ * 
+ * @param buffSD 
+ * @param numWrittenBytes 
+ * @return byte 
+ */
+byte writeSD(void* buffSD, byte* numWrittenBytes);
+
+/**
+ * @brief 
+ * 
+ * @param opType 
+ * @param errCode 
+ * @param fileName 
+ */
+void printErrSD(byte opType, byte errCode, const char* fileName);
+
+/**
+ * @brief 
+ * 
+ */
+void waitKeySD();
+
+/**
+ * @brief 
+ * 
+ */
+void exitWaitState();
 
 #endif

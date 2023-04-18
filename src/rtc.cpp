@@ -60,6 +60,10 @@ void RtcClass::print2Digit(byte data) {
 	Serial.print(data);
 }
 
+bool RtcClass::isLeapYear(byte year) {
+	return ((2000 + year) % 4) == 0;
+}
+
 void RtcClass::printDateTime(bool readDone) {
 	if (readDone) {
 		update();

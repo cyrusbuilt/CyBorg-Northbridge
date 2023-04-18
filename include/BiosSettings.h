@@ -46,6 +46,8 @@ struct BiosSettings {
 			EEPROM.update(AUTOEXEC_FLAG_ADDR, 0);
 		}
 
+		// TODO should we add special handling for an edge-case scenario where the value
+		// being read is invalid (not one of the expected values we can cast to)?
 		autoExecFlag = (bool)EEPROM.read(AUTOEXEC_FLAG_ADDR);
 		bootMode = (BootMode)EEPROM.read(BOOT_MODE_ADDR);
 	}

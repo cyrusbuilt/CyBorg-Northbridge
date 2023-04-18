@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+const byte DAYS_OF_MONTH[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
 struct DateTime {
 	byte seconds;
 	byte minutes;
@@ -21,10 +23,9 @@ public:
 	void save();
 	bool autoSet();
 	void printDateTime(bool readDone);
-	DateTime* dateTime;
-
-private:
+	bool isLeapYear(byte year);
 	void print2Digit(byte data);
+	DateTime* dateTime;
 };
 
 extern RtcClass RTC;

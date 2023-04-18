@@ -28,6 +28,9 @@
  * only exchange a single byte. WRTSCT can exchange 512 bytes.
  */
 
+// TODO Possible OpCodes to suspend the main CPU to allow add-on cards with
+// other CPUs on them to run? Or allow switching back-and-forth?
+
 /**
  * @brief Write USER LED. If Bit 7 (PIN_D0) is HIGH, then LED is ON.
  */
@@ -143,7 +146,7 @@
 
 /**
  * @brief BANKED RAM. Set the memory bank to use (binary). Set 32KB RAM bank
- * for the ower half of the Z80 address space (from 0x0000 to 0x7FFF). The
+ * for the lower half of the Z80 address space (from 0x0000 to 0x7FFF). The
  * upper half (from 0x8000 to 0xFFFF) is the common fixed bank. Allowed bank
  * numbers are in the range [0..2].
  * 
@@ -309,6 +312,18 @@
  * @brief Reserved as No-Op.
  */
 #define OP_IO_NOP 0xFF
+
+// TODO Eventually introduce OpCodes for interracting with southbridge functions (specifically A/V stuff)
+
+/**
+ * SD operation types 
+ */
+
+#define SD_OP_TYPE_MOUNT 0
+#define SD_OP_TYPE_OPEN 1
+#define SD_OP_TYPE_READ 2
+#define SD_OP_TYPE_WRITE 3
+#define SD_OP_TYPE_SEEK 4
 
 
 /**
