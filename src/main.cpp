@@ -497,6 +497,18 @@ void setBootModeFlags() {
 					fileNameSD = UCSDFN;
 					bootStrAddr = UCSDSTRADDR;
 					break;
+				case 4:
+					fileNameSD = FUZIXFN;
+					bootStrAddr = FUZSTRADDR;
+					z80IntEnFlag = true;
+					z80IntSysTick = true;
+					break;
+				case 5:
+					fileNameSD = FUZIXFN;
+					bootStrAddr = FUZSTRADDR;
+					z80IntEnFlag = false;
+					z80IntSysTick = false;
+					break;
 				default:
 					break;
 			}
