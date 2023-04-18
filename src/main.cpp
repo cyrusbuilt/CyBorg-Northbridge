@@ -368,15 +368,17 @@ void handleManualSetRTC() {
 						}
 						break;
 					case 2:
-						RTC.dateTime->day++;
-						if (RTC.dateTime->month == 2) {
-							const byte leapYear = RTC.isLeapYear(RTC.dateTime->year) ? 1 : 0;
-							const byte dayOfMonth = DAYS_OF_MONTH[RTC.dateTime->month - 1];
-							if (RTC.dateTime->day > dayOfMonth + leapYear) {
-								RTC.dateTime->day = 1;
-							}
-							else if (RTC.dateTime->day > dayOfMonth) {
-								RTC.dateTime->day = 1;
+						{
+							RTC.dateTime->day++;
+							if (RTC.dateTime->month == 2) {
+								const byte leapYear = RTC.isLeapYear(RTC.dateTime->year) ? 1 : 0;
+								const byte dayOfMonth = DAYS_OF_MONTH[RTC.dateTime->month - 1];
+								if (RTC.dateTime->day > dayOfMonth + leapYear) {
+									RTC.dateTime->day = 1;
+								}
+								else if (RTC.dateTime->day > dayOfMonth) {
+									RTC.dateTime->day = 1;
+								}
 							}
 						}
 						break;
@@ -420,15 +422,17 @@ void handleManualSetRTC() {
 						}
 						break;
 					case 2:
-						RTC.dateTime->day = RTC.dateTime->day + 10;
-						const byte leapYear = RTC.isLeapYear(RTC.dateTime->year) ? 1 : 0;
-						const byte dayOfMonth = DAYS_OF_MONTH[RTC.dateTime->month - 1];
-						if (RTC.dateTime->day > (dayOfMonth + leapYear)) {
-							RTC.dateTime->day = RTC.dateTime->day - (RTC.dateTime->day / 10) * 10;
-						}
+						{
+							RTC.dateTime->day = RTC.dateTime->day + 10;
+							const byte leapYear = RTC.isLeapYear(RTC.dateTime->year) ? 1 : 0;
+							const byte dayOfMonth = DAYS_OF_MONTH[RTC.dateTime->month - 1];
+							if (RTC.dateTime->day > (dayOfMonth + leapYear)) {
+								RTC.dateTime->day = RTC.dateTime->day - (RTC.dateTime->day / 10) * 10;
+							}
 
-						if (RTC.dateTime->day == 0) {
-							RTC.dateTime->day = 1;
+							if (RTC.dateTime->day == 0) {
+								RTC.dateTime->day = 1;
+							}
 						}
 						break;
 					case 3:
@@ -526,7 +530,7 @@ void setBootModeFlags() {
 	}
 }
 
-void bootStage4(bool* showBootMenu) {
+void bootStage4(bool showBootMenu) {
 	// TODO do we *need* to do this twice for some reason?
 	// TODO actually, do we need them at all since we call it later on depending on
 	// boot selection???
@@ -536,7 +540,7 @@ void bootStage4(bool* showBootMenu) {
 	byte selBootMode = 0;
 
 	// TODO should we handle edge case scenario here where boot mode could potentially be invalid?
-	if (&showBootMenu) {
+	if (showBootMenu) {
 		flushSerialRXBuffer();
 		Serial.println();
 		Serial.println(F("INIT: boot4 - IOS: Select boot mode or system parameters:"));
@@ -714,7 +718,7 @@ void setup() {
 	bootStage1(&showBootMenu);
 	bootStage2();
 	bootStage3();
-	bootStage4(&showBootMenu);
+	bootStage4(showBootMenu);
 	bootStage5();
 }
 
