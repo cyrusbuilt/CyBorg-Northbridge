@@ -183,6 +183,29 @@
 #define OP_IO_WR_SETBNK 0x0D        // Set bank
 
 /**
+ * @brief Enable/disable IRQ generation
+ * D7 D6 D5 D4 D3 D2 D1 D0
+ * ----------------------------------------------------------
+ * x  x  x  x  x  x  x  0   Serial RX IRQ not enabled
+ * x  x  x  x  x  x  x  1   Serial RX IRQ enabled
+ * x  x  x  x  x  x  0  x   SYSTICK IRQ not enabled
+ * x  x  x  x  x  x  1  x   SYSTICK IRQ enabled
+ * 
+ * NOTE: See OP_IO_RD_SYSIRQ for more detail.
+ */
+#define OP_IO_WR_SETIRQ 0x0E
+
+/**
+ * @brief Set the Systick timer time (milliseconds).
+ * Set/change the time (milliseconds) used for the Systick timer. At reset
+ * time, the default value is 100ms. See OP_IO_RD_SYSIRQ and
+ * OP_IO_WR_SETIRQ for more detail.
+ * 
+ * NOTE: If the time is 0 milliseconds, the set operation is ignored.
+ */
+#define OP_IO_WR_SETTICK 0x0F
+
+/**
  * I/O Read OpCodes. Follows the same semantics as I/O Write OpCodes.
  * All OpCodes except OP_IO_RD_RDSECT only exchange a single byte. RDSECT can
  * exchange 512 bytes. When it comes I/O Read operations, if PIN_A0 is LOW,
@@ -306,7 +329,41 @@
  */
 #define OP_IO_RD_SDMNT 0x87
 
+/**
+ * @brief Get the current available free space (in bytes) in the TX buffer. 
+ * NOTE: This OpCode is intended to help avoid delays in Serial TX operations,
+ * as IOS holds the Z80 in a wait status if the TX buffer is full. This is no
+ * good in multitasking environments. Using this OpCode, we can poll the buffer
+ * before transmit.
+ */
+#define OP_IO_RD_ATXBUFF 0x88
 
+/**
+ * @brief Get the Interrupt Status Byte (ISB).
+ * D7 D6 D5 D4 D3 D2 D1 D0
+ * ----------------------------------------------------------
+ * x  x  x  x  x  x  x  0   Serial RX IRQ not set
+ * x  x  x  x  x  x  x  1   Serial RX IRQ set
+ * x  x  x  x  x  x  0  x   SYSTICK IRQ not set
+ * x  x  x  x  x  x  1  x   SYSTICK IRQ set
+ *
+ * The /INT signal is shared among various interrupt requests. This allows the
+ * use of the simplified "Mode 1" scheme of the Z80 CPU (fixed jump to 0x0038 on
+ * /INT signal active) with multiple interrupt causes. The SYSIRQ purpose is to
+ * all the Z80 CPU to know the exact causes of the interrupt reading the
+ * "Interrupt Status Byte" that contains up to eight "Interrupt Status Bits".
+ * So the ISR (Interrupt Service Routine) should be structured to first read
+ * the "Interrupt Status Byte" using the SYSIRQ OpCode, then execute the needed
+ * actions before returning to normal execution. Note multiple causes/bits
+ * bould be active.
+ * 
+ * NOTE: Only D0 and D1 "Interrupt Status Bits" are currently used.
+ * NOTE: After the SYSIRQ call, all the "Interrupt Status Bits" are cleared.
+ * NOTE: The /INT signal is always reset (set HIGH) after this I/O operation,
+ * so you always have to call it from inside the ISR (on the Z80 side) before,
+ * in order to re-enable the Z80 IRQ again.
+ */
+#define OP_IO_RD_SYSIRQ 0x89
 
 /**
  * @brief Reserved as No-Op.

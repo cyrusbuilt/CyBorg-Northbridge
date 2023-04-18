@@ -22,6 +22,7 @@ bool hasRTC = false;
 bool hasExtendedRxBuf = false;
 bool isSlowClock = false;
 bool z80IntEnFlag = false;
+bool z80IntSysTick = false;
 bool lastRxIsEmpty = false;
 FATFS filesysSD;
 unsigned long timestamp = 0;
@@ -44,6 +45,8 @@ word trackSel = 0;
 byte sectSel = 0;
 byte tempByte = 0;
 byte numWriBytes = 0;
+byte irqStatus = 0;
+byte sysTickTime = 100;
 
 void initSerial() {
 	Serial.begin(SERIAL_BAUD_RATE);
@@ -864,6 +867,15 @@ void loop() {
 								break;
 						}
 						break;
+					case OP_IO_WR_SETIRQ:
+						z80IntEnFlag = (bool)(ioData & 1);
+						z80IntSysTick = (bool)(ioData & (1 << 1)) >> 1;
+						break;
+					case OP_IO_WR_SETTICK:
+						if (ioData > 0) {
+							sysTickTime = ioData;
+						}
+						break;
 					default:
 						break;
 				}
@@ -890,6 +902,7 @@ void loop() {
 					lastRxIsEmpty = true;
 				}
 
+				irqStatus &= B11111110;
 				digitalWrite(PIN_INT, HIGH);
 			}
 			else {
@@ -1004,6 +1017,14 @@ void loop() {
 					case OP_IO_RD_SDMNT:
 						ioData = mountSD(&filesysSD);
 						break;
+					case OP_IO_RD_ATXBUFF:
+						ioData = Serial.availableForWrite();
+						break;
+					case OP_IO_RD_SYSIRQ:
+						ioData = irqStatus;
+						irqStatus = 0;
+						digitalWrite(PIN_INT, HIGH);
+						break;
 					default:
 						break;
 				}
@@ -1033,6 +1054,14 @@ void loop() {
 			}
 
 			exitWaitState();
+		}
+	}
+
+	if (z80IntSysTick) {
+		if ((micros() - timestamp) > (((unsigned long)sysTickTime) * 1000)) {
+			digitalWrite(PIN_INT, LOW);
+			irqStatus |= B00000010;
+			timestamp = micros();
 		}
 	}
 }
