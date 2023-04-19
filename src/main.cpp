@@ -669,6 +669,7 @@ void bootStage4(bool showBootMenu) {
 			errCodeSD = mountSD(&filesysSD);
 			while (errCodeSD) {
 				printErrSD(SD_OP_TYPE_MOUNT, errCodeSD, NULL);
+				playErrorSound();
 				waitKeySD();
 				mountSD(&filesysSD);
 				errCodeSD = mountSD(&filesysSD);
@@ -678,6 +679,7 @@ void bootStage4(bool showBootMenu) {
 		errCodeSD = openSD(fileNameSD);
 		while (errCodeSD) {
 			printErrSD(SD_OP_TYPE_OPEN, errCodeSD, fileNameSD);
+			playErrorSound();
 			waitKeySD();
 			errCodeSD = openSD(fileNameSD);
 			if (errCodeSD != ERR_DSK_EMU_NO_FILE) {
@@ -700,6 +702,7 @@ void bootStage4(bool showBootMenu) {
 
 			if (errCodeSD) {
 				printErrSD(SD_OP_TYPE_READ, errCodeSD, fileNameSD);
+				playErrorSound();
 				waitKeySD();
 				seekSD(0);
 			}
@@ -748,7 +751,7 @@ void setup() {
 	bootStage2();
 	bootStage3();
 	bootStage4(showBootMenu);
-	bootStage5();
+	bootStage5(showBootMenu);
 }
 
 void loop() {
