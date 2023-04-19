@@ -49,6 +49,7 @@
 #define PIN_WAIT_RES 0 // PB0 pin 1 - Reset the WAIT FF
 #define PIN_USER 13    // PD5 pin 19 - USER LED and button (ON if LOW)
 #define PIN_RUN 23     // PC7 pin 29 - RUN signal from Southbridge
+#define PIN_PC_SPK 10  // PD2 pin 16 - PC Speaker/Beeper
 
 /**
  * @brief Hardware definitions GPIO expansion

@@ -206,6 +206,20 @@
 #define OP_IO_WR_SETTICK 0x0F
 
 /**
+ * @brief Start playing a sound from the PC speaker.
+ * 
+ * NOTE: Currently only supports a single byte value for frequency which limits
+ * max frequency to 255.
+ * NOTE: Sound plays until stopped by calling OP_IO_WR_BEEPSTOP.
+ */
+#define OP_IO_WR_BEEPSTART 0x20
+
+/**
+ * @brief Stop playing sound from the PC speaker.
+ */
+#define OP_IO_WR_BEEPSTOP 0x21
+
+/**
  * I/O Read OpCodes. Follows the same semantics as I/O Write OpCodes.
  * All OpCodes except OP_IO_RD_RDSECT only exchange a single byte. RDSECT can
  * exchange 512 bytes. When it comes I/O Read operations, if PIN_A0 is LOW,

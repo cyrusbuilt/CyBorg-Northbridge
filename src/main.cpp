@@ -17,6 +17,7 @@
 DebugMode debug = DebugMode::ON;
 ToggleSwitch runTrigger(PIN_RUN, NULL, NULL);
 HAF_LED iosLED(PIN_IOS_LED, NULL);
+Buzzer pcSpk(PIN_PC_SPK, NULL, NULL);
 bool hasIOExpander = false;
 bool hasRTC = false;
 bool hasExtendedRxBuf = false;
@@ -138,6 +139,29 @@ void initSystemControl() {
 	#endif
 }
 
+void initSpeaker() {
+	#ifdef DEBUG
+	Serial.print(F("INIT: boot1 - Initializing PC speaker driver... "));
+	#endif
+	pcSpk.init();
+	#ifdef DEBUG
+	Serial.println(F("DONE"));
+	#endif
+}
+
+void playErrorSound() {
+	pcSpk.buzz(50, 150);
+}
+
+void playStartupJingle() {
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_C, 50);
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_A, 50);
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_C, 50);
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_F, 500);
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_C, 50);
+	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_F, 900);
+}
+
 void bootStage1(bool *showBootMenu) {
 	#ifdef DEBUG
 	Serial.println(F("INIT: Boot stage 1."));
@@ -156,6 +180,7 @@ void bootStage1(bool *showBootMenu) {
 		hasExtendedRxBuf = true;
 	}
 
+	initSpeaker();
 	bool isPressed = checkUserButton();
 	showBootMenu = &isPressed;
 	initSystemControl();
@@ -542,6 +567,7 @@ void bootStage4(bool showBootMenu) {
 	// TODO should we handle edge case scenario here where boot mode could potentially be invalid?
 	if (showBootMenu) {
 		flushSerialRXBuffer();
+		playStartupJingle();
 		Serial.println();
 		Serial.println(F("INIT: boot4 - IOS: Select boot mode or system parameters:"));
 		Serial.println();
@@ -689,9 +715,12 @@ void bootStage4(bool showBootMenu) {
 	Serial.println(F(" Done"));
 }
 
-void bootStage5() {
+void bootStage5(bool showBoot) {
 	// TODO Show summary screen?
 	// TODO BIOS version, RTC presence, IOEXP presence, CPU speed, RAM, etc.
+	if (!showBoot) {
+		playStartupJingle();
+	}
 
 	digitalWrite(PIN_RESET, LOW);
 	ASSR &= ~(1 << AS2);
@@ -891,6 +920,14 @@ void loop() {
 						if (ioData > 0) {
 							sysTickTime = ioData;
 						}
+						break;
+					case OP_IO_WR_BEEPSTART:
+						// TODO Support frequencies higher than 255 by allowing for a 4 byte exchange to get
+						// a full integer.
+						pcSpk.buzz(ioData, 0UL);
+						break;
+					case OP_IO_WR_BEEPSTOP:
+						pcSpk.off();
 						break;
 					default:
 						break;
