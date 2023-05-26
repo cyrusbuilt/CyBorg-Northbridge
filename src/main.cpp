@@ -9,8 +9,6 @@
 #include "rtc.h"
 #include "ToggleSwitch.h"
 
-#define DEBUG
-
 #define FW_VERSION "1.0"
 
 // Global vars
@@ -32,8 +30,8 @@ char OsName[11] = DS_OSNAME;
 byte bufferSD[32];
 byte numReadBytes = 0;
 byte iCount = 0;
-word bootStrAddr = 0;
-word bootImageSize = 0;
+word bootStrAddr = boot_A_StrAddr;
+word bootImageSize = sizeof(boot_A_);
 const char* fileNameSD;
 byte* bootImage;
 char diskName[11] = Z80DISK;
@@ -48,9 +46,13 @@ byte tempByte = 0;
 byte numWriBytes = 0;
 byte irqStatus = 0;
 byte sysTickTime = 100;
+bool showBootMenu = false;
 
 void initSerial() {
 	Serial.begin(SERIAL_BAUD_RATE);
+	Serial.print(F("CyBorg BIOS v"));
+	Serial.println(FW_VERSION);
+	Serial.println(F("Copyright (c) 2023 Cyrus Brunner"));
 	#ifdef DEBUG
 	Serial.println(F("INIT: Boot stage 0."));
 	#endif
@@ -77,15 +79,13 @@ void initRunTrigger() {
 	#ifdef DEBUG
 	Serial.println(F("INIT: boot0 - Waiting for boot signal from Southbridge..."));
 	#endif
-	bool gotSignal = false;
-	unsigned long timestamp = millis();
+	delay(200);
 	while (true) {
-		gotSignal = (digitalRead(PIN_RUN) == HIGH);
-		if (gotSignal && (millis() - timestamp) > 200) {
+		if (digitalRead(PIN_RUN) == HIGH) {
 			break;
 		}
-
-		timestamp = millis();
+		
+		delay(10);
 	}
 }
 
@@ -106,7 +106,10 @@ bool checkUserButton() {
 	Serial.println(F("INIT: boot1 - Checking USER button..."));
 	#endif
 	pinMode(PIN_USER, INPUT_PULLUP);
-	return (digitalRead(PIN_USER) == LOW);
+	Serial.print(F("DEBUG: User button state: "));
+	int state = digitalRead(PIN_USER);
+	Serial.println(state);
+	return (state == LOW);
 }
 
 void initSystemControl() {
@@ -162,7 +165,7 @@ void playStartupJingle() {
 	pcSpk.playNote(BuzzerNotes::BUZZER_NOTE_F, 900);
 }
 
-void bootStage1(bool *showBootMenu) {
+void bootStage1() {
 	#ifdef DEBUG
 	Serial.println(F("INIT: Boot stage 1."));
 	Serial.println(F("INIT: boot1 - CyBorg is alive!\r\nCyBorg IOS - I/O Subsystem\r\n"));
@@ -181,8 +184,9 @@ void bootStage1(bool *showBootMenu) {
 	}
 
 	initSpeaker();
-	bool isPressed = checkUserButton();
-	showBootMenu = &isPressed;
+	showBootMenu = checkUserButton();
+	Serial.print(F("DEBUG: Show boot menu: "));
+	Serial.println(showBootMenu);
 	initSystemControl();
 }
 
@@ -246,6 +250,8 @@ void loadBiosSettings() {
 	biosSettings_t.load();
 	#ifdef DEBUG
 	Serial.println(F("DONE"));
+	Serial.print(F("DEBUG: Loaded boot mode: "));
+	Serial.println((uint8_t)biosSettings_t.bootMode);
 	#endif
 	
 	#ifdef DEBUG
@@ -278,7 +284,7 @@ void initBusExpander() {
 
 void bootStage3() {
 	#ifdef DEBUG
-	Serial.print(F("INIT: Boot stage 3."));
+	Serial.println(F("INIT: Boot stage 3."));
 	#endif
 	loadBiosSettings();
 	initBusExpander();
@@ -311,6 +317,11 @@ void handleToggleClockMode() {
 
 void handleToggleAutoExecFlag() {
 	biosSettings_t.autoExecFlag = !biosSettings_t.autoExecFlag;
+	biosSettings_t.save();
+}
+
+void handleToggleStartupJingle() {
+	biosSettings_t.enableStartupJingle = !biosSettings_t.enableStartupJingle;
 	biosSettings_t.save();
 }
 
@@ -497,6 +508,9 @@ void handleManualSetRTC() {
 }
 
 void setBootModeFlags() {
+	// Default to BIOS boot image.
+	bootImage = (byte*)pgm_read_word(&flashBootTable[0]);
+
 	switch (biosSettings_t.bootMode) {
 		case BootMode::BASIC:
 			fileNameSD = BASICFN;
@@ -541,6 +555,7 @@ void setBootModeFlags() {
 				default:
 					break;
 			}
+			break;
 		case BootMode::AUTO:
 			fileNameSD = AUTOFN;
 			bootStrAddr = AUTSTRADDR;
@@ -555,24 +570,64 @@ void setBootModeFlags() {
 	}
 }
 
-void bootStage4(bool showBootMenu) {
+void handleMoreSettings() {
+	Serial.println(F(" 0: Back"));
+	Serial.print(F(" 1: Toggle startup jingle (->"));
+	Serial.print(biosSettings_t.enableStartupJingle ? F("ON") : F("OFF"));
+	Serial.println(F(")"));
+
+	char minBootChar = '0';
+	char maxSelChar = '0';
+	if (hasRTC) {
+		Serial.println(F(" 2: Change RTC time/date"));
+		maxSelChar = '2';
+	}
+
+	Serial.println();
+	timestamp = millis();
+	Serial.print(F("Enter your choice >"));
+	do {
+		blinkIOSled(&timestamp);
+		inChar = Serial.read();
+	} while((inChar < minBootChar) || (inChar > maxSelChar));
+
+	Serial.print(inChar);
+	Serial.println(F(" OK"));
+
+	switch (inChar) {
+		case '1':
+			handleToggleStartupJingle();
+			break;
+		case '2':
+			handleManualSetRTC();
+			break;
+		default:
+			break;
+	}
+
+	inChar = '9';
+}
+
+void bootStage4() {
 	// TODO do we *need* to do this twice for some reason?
 	// TODO actually, do we need them at all since we call it later on depending on
 	// boot selection???
 	mountSD(&filesysSD);
 	mountSD(&filesysSD);
-	const byte maxBootMode = (byte)BootMode::BASIC;
-	byte selBootMode = 0;
+	const byte maxBootMode = (byte)BootMode::ILOAD;
+	byte selBootMode = (byte)biosSettings_t.bootMode;
 
 	// TODO should we handle edge case scenario here where boot mode could potentially be invalid?
 	if (showBootMenu) {
 		flushSerialRXBuffer();
-		playStartupJingle();
+		if (biosSettings_t.enableStartupJingle) {
+			playStartupJingle();
+		}
 		Serial.println();
 		Serial.println(F("INIT: boot4 - IOS: Select boot mode or system parameters:"));
 		Serial.println();
 		Serial.print(F(" 0: No change ("));
-		Serial.print((uint8_t)biosSettings_t.bootMode + 1);
+		Serial.print(((uint8_t)biosSettings_t.bootMode) + 1);
 		Serial.println(F(")"));
 		Serial.println(F(" 1: BASIC"));
 		Serial.println(F(" 2: Forth"));
@@ -580,22 +635,19 @@ void bootStage4(bool showBootMenu) {
 		printOsName(biosSettings_t.diskSet);
 		Serial.println(F("\r\n 4: Autoboot"));
 		Serial.println(F(" 5: iLoad"));
-		Serial.println(F(" 6: Change Z80 clock speed (->"));
+		Serial.print(F(" 6: Change Z80 clock speed (->"));
 		Serial.print(biosSettings_t.clockMode == ClockMode::FAST ? CLOCK_HIGH : CLOCK_LOW);
-		Serial.println(F("MHz"));
+		Serial.println(F("MHz)"));
 		Serial.print(F(" 7: Toggle CP/M Autoexec (->"));
 		Serial.print(biosSettings_t.autoExecFlag ? F("ON") : F("OFF"));
 		Serial.println(F(")"));
 		Serial.print(F(" 8: Change "));
 		printOsName(biosSettings_t.diskSet);
 		Serial.println();
+		Serial.println(F(" 9: More settings"));
 
 		char minBootChar = '0';
-		char maxSelChar = '8';
-		if (hasRTC) {
-			Serial.println(F(" 9: Change RTC time/date"));
-			maxSelChar = '9';
-		}
+		char maxSelChar = '9';
 
 		// Ask the user to make a boot selection choice.
 		Serial.println();
@@ -620,14 +672,15 @@ void bootStage4(bool showBootMenu) {
 				handleChangeDiskSet();
 				break;
 			case '9':
-				handleManualSetRTC();
+				handleMoreSettings();
 				break;
 			default:
 				break;
 		}
 
-		
 		selBootMode = (byte)(inChar - '1');
+		Serial.print(F("DEBUG: selected boot mode: "));
+		Serial.println(selBootMode);
 		if (selBootMode <= maxBootMode) {
 			biosSettings_t.bootMode = (BootMode)selBootMode;
 			biosSettings_t.save();
@@ -636,6 +689,9 @@ void bootStage4(bool showBootMenu) {
 			biosSettings_t.load();
 		}
 	}
+
+	Serial.print(F("DEBUG: BIOS boot mode: "));
+	Serial.println((uint8_t)biosSettings_t.bootMode);
 
 	if (biosSettings_t.bootMode == BootMode::OS_ON_SD) {
 		Serial.print(F("INIT: boot4 - IOS: Current "));
@@ -647,6 +703,7 @@ void bootStage4(bool showBootMenu) {
 	digitalWrite(PIN_WAIT_RES, HIGH);
 	if (bootStrAddr > ZERO_ADDR) {
 		loadHL(ZERO_ADDR);
+		loadByteToRAM(OPC_JP_NN);
 		loadByteToRAM(lowByte(bootStrAddr));
 		loadByteToRAM(highByte(bootStrAddr));
 		if (debug != DebugMode::OFF) {
@@ -667,38 +724,42 @@ void bootStage4(bool showBootMenu) {
 	if (selBootMode < maxBootMode) {
 		if (mountSD(&filesysSD)) {
 			errCodeSD = mountSD(&filesysSD);
-			while (errCodeSD) {
-				printErrSD(SD_OP_TYPE_MOUNT, errCodeSD, NULL);
-				playErrorSound();
-				waitKeySD();
-				mountSD(&filesysSD);
-				errCodeSD = mountSD(&filesysSD);
+			if (errCodeSD) {
+				do {
+					printErrSD(SD_OP_TYPE_MOUNT, errCodeSD, NULL);
+					playErrorSound();
+					waitKeySD();
+					mountSD(&filesysSD);
+					errCodeSD = mountSD(&filesysSD);
+				} while (errCodeSD);
 			}
 		}
 
 		errCodeSD = openSD(fileNameSD);
-		while (errCodeSD) {
-			printErrSD(SD_OP_TYPE_OPEN, errCodeSD, fileNameSD);
-			playErrorSound();
-			waitKeySD();
-			errCodeSD = openSD(fileNameSD);
-			if (errCodeSD != ERR_DSK_EMU_NO_FILE) {
-				mountSD(&filesysSD);
-				mountSD(&filesysSD);
+		if (errCodeSD) {
+			do {
+				printErrSD(SD_OP_TYPE_OPEN, errCodeSD, fileNameSD);
+				playErrorSound();
+				waitKeySD();
 				errCodeSD = openSD(fileNameSD);
-			}
+				if (errCodeSD != ERR_DSK_EMU_NO_FILE) {
+					mountSD(&filesysSD);
+					mountSD(&filesysSD);
+					errCodeSD = openSD(fileNameSD);
+				}
+			} while (errCodeSD);
 		}
 
 		Serial.print(F("INIT: boot4 - IOS: Loading boot program ("));
 		Serial.print(fileNameSD);
 		Serial.print(F(")..."));
-		while (errCodeSD) {
-			while ((numReadBytes == 32) && (!errCodeSD)) {
+		do {
+			do {
 				errCodeSD = readSD(bufferSD, &numReadBytes);
 				for (iCount = 0; iCount < numReadBytes; iCount++) {
 					loadByteToRAM(bufferSD[iCount]);
 				}
-			}
+			} while ((numReadBytes == 32) && (!errCodeSD));
 
 			if (errCodeSD) {
 				printErrSD(SD_OP_TYPE_READ, errCodeSD, fileNameSD);
@@ -706,22 +767,23 @@ void bootStage4(bool showBootMenu) {
 				waitKeySD();
 				seekSD(0);
 			}
-		}
+		} while (errCodeSD);
 	}
 	else {
 		Serial.print(F("INIT: boot 4 - IOS: Loading boot program..."));
 		for (word i = 0; i < bootImageSize; i++) {
-			loadByteToRAM(pgm_read_byte(bootImage + i));
+			byte val = pgm_read_byte(bootImage + i);
+			loadByteToRAM(val);
 		}
 	}
 
 	Serial.println(F(" Done"));
 }
 
-void bootStage5(bool showBoot) {
+void bootStage5() {
 	// TODO Show summary screen?
 	// TODO BIOS version, RTC presence, IOEXP presence, CPU speed, RAM, etc.
-	if (!showBoot) {
+	if (!showBootMenu && biosSettings_t.enableStartupJingle) {
 		playStartupJingle();
 	}
 
@@ -745,13 +807,12 @@ void bootStage5(bool showBoot) {
 }
 
 void setup() {
-	bool showBootMenu = false;
 	bootStage0();
-	bootStage1(&showBootMenu);
+	bootStage1();
 	bootStage2();
 	bootStage3();
-	bootStage4(showBootMenu);
-	bootStage5(showBootMenu);
+	bootStage4();
+	bootStage5();
 }
 
 void loop() {

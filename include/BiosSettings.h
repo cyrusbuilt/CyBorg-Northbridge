@@ -8,6 +8,7 @@
 #define AUTOEXEC_FLAG_ADDR 12    // Internal EEPROM address for AUTOEXEC flag storage.
 #define CLOCK_MODE_ADDR 13       // Internal EEPROM address for the Z80 clock high/low speed switch.
 #define DISK_SET_ADDR 14         // Internal EEPROM address for the current disk set [0..99].
+#define STARTUP_JINGLE_ADDR 15   // Internal EEPROM address of startup jingle flag storage.
 #define MAX_DISK_NUM 99          // Maximum number of virtual disks.
 #define MAX_DISK_SET 4           // Maximum number of configured disk sets.
 
@@ -28,7 +29,16 @@ struct BiosSettings {
 	ClockMode clockMode;
 	byte diskSet;
 	bool autoExecFlag;
+	bool enableStartupJingle;
 	BootMode bootMode;
+
+	BiosSettings() {
+		clockMode = ClockMode::SLOW;
+		diskSet = 0;
+		autoExecFlag = false;
+		enableStartupJingle = true;
+		bootMode = BootMode::ILOAD;
+	}
 
 	void load() {
 		if (EEPROM.read(CLOCK_MODE_ADDR) > (byte)ClockMode::SLOW) {
@@ -50,6 +60,7 @@ struct BiosSettings {
 		// being read is invalid (not one of the expected values we can cast to)?
 		autoExecFlag = (bool)EEPROM.read(AUTOEXEC_FLAG_ADDR);
 		bootMode = (BootMode)EEPROM.read(BOOT_MODE_ADDR);
+		enableStartupJingle = (bool)EEPROM.read(STARTUP_JINGLE_ADDR);
 	}
 
 	void save() {
@@ -57,6 +68,7 @@ struct BiosSettings {
 		EEPROM.update(DISK_SET_ADDR, diskSet);
 		EEPROM.update(AUTOEXEC_FLAG_ADDR, (byte)autoExecFlag);
 		EEPROM.update(BOOT_MODE_ADDR, (byte)bootMode);
+		EEPROM.update(STARTUP_JINGLE_ADDR, (byte)enableStartupJingle);
 	}
 };
 

@@ -56,7 +56,7 @@ void loadByteToRAM(byte value) {
 
 	pulseClock(1);
 	digitalWrite(PIN_RAM_CE2, LOW);
-	DDRA = 0x00;
+	DDRA = 0xFF;
 	PORTA = OPC_INC_HL;
 	pulseClock(2);
 	DDRA = 0x00;

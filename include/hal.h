@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include "PetitFS.h"
 
+#define DEBUG
+
 /**
  * @brief Hardware definitions for base system.
  */
@@ -75,6 +77,7 @@
 /**
  * @brief File names and starting addresses
  */
+
 #define ZERO_ADDR 0x0000
 #define BASICFN "BASIC47.BIN"
 #define FORTHFN "FORTH13.BIN"
