@@ -1,3 +1,14 @@
+/**
+ * @file main.cpp
+ * @author Chris "Cyrus" Brunner (cyrusbuilt@gmail.com)
+ * @brief Firmware for the CyBorg "Northbridge".
+ * @version 0.1
+ * @date 2023-05-28
+ * 
+ * @copyright Copyright (c) Cyrus Brunner 2023
+ * Derived from the Z80-MBC2 IOS firmware by SuperFabius
+ */
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "LED.h"
@@ -39,7 +50,7 @@ byte ioAddress = 0;
 byte ioData = 0;
 byte ioOpCode = 0;
 byte ioByteCount = 0;
-byte diskErr = 0;
+byte diskErr = ERR_DSK_EMU_UNEXPECTED_EOF;
 word trackSel = 0;
 byte sectSel = 0;
 byte tempByte = 0;
