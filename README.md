@@ -3,7 +3,9 @@
 
 Firmware for the [CyBorg](https://github.com/cyrusbuilt/CyBorg) ViCREM chip (ATMEGA32A) (Formerly known as the "Northbridge")
 
-## ViCREM (**Vi**rtual I/O, **C**lock, **R**OM/BIOS, **E**xpansion Peripheral I/O, **M**emory Managment)
+## ViCREM
+
+(**Vi**rtual I/O, **C**lock, **R**OM/BIOS, **E**xpansion Peripheral I/O, **M**emory Managment)
 
 ## What does it do?
 ViCREM is a sort of all-in-one chip that replaces most of the glue logic and peripheral chips you find in a more traditional Z80 system. I'm not familiar enough with CPLDs, PALs, GALs, or FPGAs, so something Arduino-based seemed like a suitable solution for me, and keeps the chip count low. ViCREM provides the functions:
