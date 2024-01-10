@@ -11,6 +11,7 @@
  */
 
 #define SERIAL_BAUD_RATE 115200  // BAUD rate for the Serial port.
+// TODO Make it possible to change BAUD rate
 
 // Z80 data bus
 #define PIN_D0 24      // PA0 pin 40
@@ -83,9 +84,10 @@
 #define FORTHFN "FORTH13.BIN"
 #define CPMFN "CPM22.BIN"
 #define QPMFN "QPMLDR.BIN"
-#define CPM3FN "CPMLDR.BIN"
+#define CPM3FN "CPMLDR.COM"
 #define FUZIXFN "FUZIX.BIN"
 #define UCSDFN "UCSDLDR.BIN"
+#define COSFN "COS.BIN"
 #define AUTOFN "AUTOBOOT.BIN"
 #define Z80DISK "DSxNyy.DSK"
 #define DS_OSNAME "DSxNAM.DAT"
@@ -94,8 +96,9 @@
 #define CPM22CBASE 0xD200
 #define CPMSTRADDR (CPM22CBASE - 32)
 #define QPMSTRADDR 0x80
-#define CPM3STRADDR ZERO_ADDR
+#define CPM3STRADDR 0x100
 #define UCSDSTRADDR ZERO_ADDR
+#define COSSTRADDR ZERO_ADDR
 #define FUZSTRADDR ZERO_ADDR
 #define AUTSTRADDR ZERO_ADDR
 

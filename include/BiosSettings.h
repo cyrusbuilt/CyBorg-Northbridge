@@ -10,7 +10,7 @@
 #define DISK_SET_ADDR 14         // Internal EEPROM address for the current disk set [0..99].
 #define STARTUP_JINGLE_ADDR 15   // Internal EEPROM address of startup jingle flag storage.
 #define MAX_DISK_NUM 99          // Maximum number of virtual disks.
-#define MAX_DISK_SET 4           // Maximum number of configured disk sets.
+#define MAX_DISK_SET 6           // Maximum number of configured disk sets.
 
 enum class ClockMode : uint8_t {
 	SLOW = 1,

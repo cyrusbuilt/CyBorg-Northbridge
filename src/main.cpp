@@ -2,7 +2,7 @@
  * @file main.cpp
  * @author Chris "Cyrus" Brunner (cyrusbuilt@gmail.com)
  * @brief Firmware for the CyBorg "Northbridge".
- * @version 0.1
+ * @version 1.1
  * @date 2023-05-28
  * 
  * @copyright Copyright (c) Cyrus Brunner 2023
@@ -20,7 +20,7 @@
 #include "rtc.h"
 #include "ToggleSwitch.h"
 
-#define FW_VERSION "1.0"
+#define FW_VERSION "1.1"
 
 // Global vars
 DebugMode debug = DebugMode::ON;
@@ -284,6 +284,10 @@ void initBusExpander() {
 	#endif
 	Wire.begin();
 	Serial.println(F("DONE"));
+	// TODO implement a software reset of the I/O expander by first instructing
+	// KAMVA to cycle the /RESET pin on the MCP23017 and then we need re-init
+	// I2C communication with it. But first, we need a way to send a command
+	// to KAMVA for this *and* an OpCode for our virtual I/O engine to process.
 	Wire.beginTransmission(GPIOEXP_ADDR);
 	hasIOExpander = (Wire.endTransmission() == 0);
 	#ifdef DEBUG
@@ -338,7 +342,7 @@ void handleToggleStartupJingle() {
 
 void handleChangeDiskSet() {
 	Serial.println(F("\r\nPress CR to accept, ESC to exit or any other key to change"));
-	iCount = biosSettings_t.diskSet;
+	iCount = (byte)(biosSettings_t.diskSet - 1);
 	do {
 		iCount = (iCount + 1) % MAX_DISK_SET;
 		Serial.print(F("\r ->"));
@@ -552,16 +556,14 @@ void setBootModeFlags() {
 					bootStrAddr = UCSDSTRADDR;
 					break;
 				case 4:
-					fileNameSD = FUZIXFN;
-					bootStrAddr = FUZSTRADDR;
-					z80IntEnFlag = true;
-					z80IntSysTick = true;
+					fileNameSD = COSFN;
+					bootStrAddr = COSSTRADDR;
 					break;
 				case 5:
 					fileNameSD = FUZIXFN;
 					bootStrAddr = FUZSTRADDR;
-					z80IntEnFlag = false;
-					z80IntSysTick = false;
+					z80IntEnFlag = true;
+					z80IntSysTick = true;
 					break;
 				default:
 					break;
