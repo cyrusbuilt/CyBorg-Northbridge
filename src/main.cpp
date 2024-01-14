@@ -1,13 +1,17 @@
 /**
  * @file main.cpp
  * @author Chris "Cyrus" Brunner (cyrusbuilt@gmail.com)
- * @brief Firmware for the CyBorg "Northbridge".
- * @version 0.1
+ * @brief Firmware for the CyBorg "Northbridge" aka "ViCREM".
+ * @version 1.1
  * @date 2023-05-28
  * 
  * @copyright Copyright (c) Cyrus Brunner 2023
  * Derived from the Z80-MBC2 IOS firmware by SuperFabius
  */
+
+#ifndef __AVR_ATmega32__
+	#error "This firmware is currently only supported on the ATmega32 MCU!"
+#endif
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -20,7 +24,7 @@
 #include "rtc.h"
 #include "ToggleSwitch.h"
 
-#define FW_VERSION "1.0"
+#define FW_VERSION "1.1"
 
 // Global vars
 DebugMode debug = DebugMode::ON;
@@ -284,6 +288,10 @@ void initBusExpander() {
 	#endif
 	Wire.begin();
 	Serial.println(F("DONE"));
+	// TODO implement a software reset of the I/O expander by first instructing
+	// KAMVA to cycle the /RESET pin on the MCP23017 and then we need re-init
+	// I2C communication with it. But first, we need a way to send a command
+	// to KAMVA for this *and* an OpCode for our virtual I/O engine to process.
 	Wire.beginTransmission(GPIOEXP_ADDR);
 	hasIOExpander = (Wire.endTransmission() == 0);
 	#ifdef DEBUG
@@ -338,7 +346,7 @@ void handleToggleStartupJingle() {
 
 void handleChangeDiskSet() {
 	Serial.println(F("\r\nPress CR to accept, ESC to exit or any other key to change"));
-	iCount = biosSettings_t.diskSet;
+	iCount = (byte)(biosSettings_t.diskSet - 1);
 	do {
 		iCount = (iCount + 1) % MAX_DISK_SET;
 		Serial.print(F("\r ->"));
@@ -354,6 +362,7 @@ void handleChangeDiskSet() {
 	if (inChar == KEY_CODE_CR) {
 		biosSettings_t.diskSet = iCount;
 		biosSettings_t.save();
+		inChar = '3';
 	}
 }
 
@@ -552,16 +561,14 @@ void setBootModeFlags() {
 					bootStrAddr = UCSDSTRADDR;
 					break;
 				case 4:
-					fileNameSD = FUZIXFN;
-					bootStrAddr = FUZSTRADDR;
-					z80IntEnFlag = true;
-					z80IntSysTick = true;
+					fileNameSD = COSFN;
+					bootStrAddr = COSSTRADDR;
 					break;
 				case 5:
 					fileNameSD = FUZIXFN;
 					bootStrAddr = FUZSTRADDR;
-					z80IntEnFlag = false;
-					z80IntSysTick = false;
+					z80IntEnFlag = true;
+					z80IntSysTick = true;
 					break;
 				default:
 					break;
@@ -906,9 +913,11 @@ void loop() {
 						break;
 					case OP_IO_WR_SELTRK:
 						if (!ioByteCount) {
+							// LSB
 							trackSel = ioData;
 						}
 						else {
+							// MSB
 							trackSel = (((word)ioData) << 8) | lowByte(trackSel);
 							if ((trackSel < MAX_TRACKS) && (sectSel < MAX_SECTORS)) {
 								diskErr = ERR_DSK_EMU_OK;
@@ -1030,8 +1039,8 @@ void loop() {
 					lastRxIsEmpty = true;
 				}
 
-				irqStatus &= B11111110;
 				digitalWrite(PIN_INT, HIGH);
+				irqStatus &= B11111110;
 			}
 			else {
 				// AD0 = 0 (I/O Read address = 0x00). Execute read OpCode.
@@ -1069,7 +1078,7 @@ void loop() {
 						ioData = biosSettings_t.autoExecFlag
 							| ((byte)hasRTC << 1)
 							| ((Serial.available() > 0) << 2)
-							| (lastRxIsEmpty << 3);
+							| ((lastRxIsEmpty > 0) << 3);
 						break;
 					case OP_IO_RD_DATTME:
 						if (hasRTC) {
@@ -1151,7 +1160,6 @@ void loop() {
 					case OP_IO_RD_SYSIRQ:
 						ioData = irqStatus;
 						irqStatus = 0;
-						digitalWrite(PIN_INT, HIGH);
 						break;
 					default:
 						break;
@@ -1162,7 +1170,7 @@ void loop() {
 				}
 			}
 
-			DDRA = 0xFF;       // Configure Z80 data bus D0 - D7 (PA0 - PA7) as output
+			DDRA = OP_IO_NOP;  // Configure Z80 data bus D0 - D7 (PA0 - PA7) as output
 			PORTA = ioData;    // Write to data bus.
 
 			// Bus control to exit from wait state (M I/O read cycle)
@@ -1175,6 +1183,8 @@ void loop() {
 			digitalWrite(PIN_BUSREQ, HIGH);    // Resume Z80 from DMA.
 		}
 		else {
+			digitalWrite(PIN_INT, HIGH);
+
 			// VIRTUAL INTERRUPT
 			if (debug == DebugMode::TRACE) {
 				Serial.println();

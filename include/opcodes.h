@@ -31,6 +31,8 @@
 // TODO Possible OpCodes to suspend the main CPU to allow add-on cards with
 // other CPUs on them to run? Or allow switching back-and-forth?
 
+// TODO OpCodes for R/W SPP add-on board
+
 /**
  * @brief Write USER LED. If Bit 7 (PIN_D0) is HIGH, then LED is ON.
  */

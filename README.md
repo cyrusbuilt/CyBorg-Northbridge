@@ -32,7 +32,7 @@ This project was built using [PlatformIO](https://platformio.org), so you'll nee
 
 This should set the fuses and flash the bootloader to the chip. **NOTE** this only needs to be done *ONCE*.
 
-2) Once the ATMEGA32A has a bootloader or if you happened to get a chip that already has a bootloader, then you need to build and upload the actual firmware. To do this, we still the Arduino Uno we're using as a programmer in step 1. Making sure CyBorg is powered off, insert the ATMEGA32A chip into it's socket on the CyBorg board. **IMPORTANT NOTE** This procedure assumes you've already installed and flashed the KAMVA (Southbridge) chip and is functioning normally. Now connect the arduino the ICSP header on CyBorg:
+2) Once the ATMEGA32A has a bootloader or if you happened to get a chip that already has a bootloader, then you need to build and upload the actual firmware. To do this, we still need the Arduino Uno we're using as a programmer in step 1. Making sure CyBorg is powered off, insert the ATMEGA32A chip into it's socket on the CyBorg board. **IMPORTANT NOTE** This procedure assumes you've already installed and flashed the KAMVA (Southbridge) chip and is functioning normally. Now connect the arduino the ICSP header on CyBorg:
 
 | Arduino Pin | ->   | ICSP Pin |
 | :---        | :--- | :---     |
