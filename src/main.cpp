@@ -32,10 +32,11 @@ ToggleSwitch runTrigger(PIN_RUN, NULL, NULL);
 HAF_LED iosLED(PIN_IOS_LED, NULL);
 Buzzer pcSpk(PIN_PC_SPK, NULL, NULL);
 bool hasIOExpander = false;
+bool hasSPP = false;
 bool hasRTC = false;
 bool hasExtendedRxBuf = false;
 bool isSlowClock = false;
-bool z80IntEnFlag = false;
+bool z80IntEnFlag = false;  // TODO We set this flag, but never consume it anywhere.
 bool z80IntSysTick = false;
 bool lastRxIsEmpty = false;
 FATFS filesysSD;
@@ -61,6 +62,7 @@ byte tempByte = 0;
 byte numWriBytes = 0;
 byte irqStatus = 0;
 byte sysTickTime = 100;
+byte sppAutoFd = 0;
 bool showBootMenu = false;
 
 void initSerial() {
@@ -287,7 +289,9 @@ void initBusExpander() {
 	Serial.print(F("INIT: boot3 - Initializing I2C bus... "));
 	#endif
 	Wire.begin();
+	#ifdef DEBUG
 	Serial.println(F("DONE"));
+	#endif
 	// TODO implement a software reset of the I/O expander by first instructing
 	// KAMVA to cycle the /RESET pin on the MCP23017 and then we need re-init
 	// I2C communication with it. But first, we need a way to send a command
@@ -301,6 +305,16 @@ void initBusExpander() {
 	#endif
 }
 
+void detectParallelPort() {
+	Wire.beginTransmission(SPP_ADDR);
+	hasSPP = (Wire.endTransmission() == 0);
+	#ifdef DEBUG
+	if (hasSPP) {
+		Serial.println(F("INIT: boot3 - IOS: Found Standard Parallel Port card"));
+	}
+	#endif
+}
+
 void bootStage3() {
 	#ifdef DEBUG
 	Serial.println(F("INIT: Boot stage 3."));
@@ -308,6 +322,7 @@ void bootStage3() {
 	loadBiosSettings();
 	initBusExpander();
 	hasRTC = RTC.autoSet();
+	detectParallelPort();
 }
 
 void printOsName(byte currentDiskSet) {
@@ -841,13 +856,15 @@ void loop() {
 			ioAddress = digitalRead(PIN_AD0);
 			ioData = PINA;
 			if (ioAddress) {
+				// STORE opcode
 				ioOpCode = ioData;
 				ioByteCount = 0;
 			}
 			else {
+				// EXECUTE opcode
 				switch (ioOpCode) {
 					case OP_IO_WR_USR_LED:
-						digitalWrite(PIN_USER, (ioData & B00000001) ? LOW : HIGH);
+						digitalWrite(PIN_USER, (ioData & 0x01) ? LOW : HIGH);
 						break;
 					case OP_IO_WR_SER_TX:
 						Serial.write(ioData);
@@ -886,7 +903,7 @@ void loop() {
 						break;
 					case OP_IO_WR_GPPUA:
 						if (hasIOExpander) {
-							Wire.endTransmission(GPIOEXP_ADDR);
+							Wire.beginTransmission(GPIOEXP_ADDR);
 							Wire.write(GPPUA_REG);
 							Wire.write(ioData);
 							Wire.endTransmission();
@@ -1013,6 +1030,67 @@ void loop() {
 					case OP_IO_WR_BEEPSTOP:
 						pcSpk.off();
 						break;
+					case OP_SPP_WR_INIT:
+						if (hasSPP) {
+							sppAutoFd = (!ioData) & 0x01;  // Store the value of the AUTOFD Control Line (active Low))
+
+							// Set STROBE and INIT at 1, and AUTOFD = !D0
+							Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(GPIOA_REG);              // Select GPIOA
+              				Wire.write(0b00000101 | (byte) (sppAutoFd << 1)); // Write value
+              				Wire.endTransmission();
+
+							// Set the GPIO port to work as an SPP port (direction and pullup)
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(IODIRA_REG);             // Select IODIRA
+              				Wire.write(0b11111000);             // Write value (1 = input, 0 = ouput)
+              				Wire.endTransmission();
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(IODIRB_REG);             // Select IODIRB 
+              				Wire.write(0b00000000);             // Write value (1 = input, 0 = ouput)
+              				Wire.endTransmission();
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(GPPUA_REG);              // Select GPPUA
+              				Wire.write(0b11111111);             // Write value (1 = pullup enabled, 0 = pullup disabled)
+              				Wire.endTransmission();
+
+							// Initialize the printer using a pulse on INIT
+              				// NOTE: The I2C protocol introduces delays greater than needed by the SPP, so no further delay is used here to generate the pulse
+              				tempByte = 0b00000001 | (byte) (sppAutoFd << 1);  // Change INIT bit to active (Low)
+             				Wire.beginTransmission(GPIOEXP_ADDR);
+              				Wire.write(GPIOA_REG);              // Select GPIOA
+              				Wire.write(tempByte);               // Set INIT bit to active (Low)
+              				Wire.endTransmission();
+
+              				tempByte = tempByte | 0b00000100;   // Change INIT bit to not active (High)
+              				Wire.beginTransmission(GPIOEXP_ADDR);
+              				Wire.write(GPIOA_REG);              // Select GPIOA
+              				Wire.write(tempByte);               // Set INIT bit to not active (High)
+              				Wire.endTransmission();
+						}
+						break;
+					case OP_SPP_WR_WRITE:
+						if (hasSPP) {
+							// NOTE: The I2C protocol introduces delays greater than needed by the SPP, so no further delay is used here to generate the pulse
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(GPIOB_REG);              // Select GPIOB
+              				Wire.write(ioData);                 // Data on GPIOB
+              				Wire.endTransmission();
+
+              				tempByte = 0b11111100 | (byte) (sppAutoFd << 1);  // Change STROBE bit to active (Low)
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(GPIOA_REG);              // Select GPIOA
+              				Wire.write(tempByte);               // Set STROBE bit to active (Low)
+              				Wire.endTransmission();
+
+              				tempByte = tempByte | 0b00000001;   // Change STROBE bit to not active (High)
+              				Wire.beginTransmission(SPP_ADDR);
+              				Wire.write(GPIOA_REG);              // Select GPIOA
+              				Wire.write(tempByte);               // Set STROBE bit to not active (High)
+              				Wire.endTransmission();
+						}
+						break;
+					// TODO process opcode for resetting the IOEXP
 					default:
 						break;
 				}
@@ -1160,6 +1238,20 @@ void loop() {
 					case OP_IO_RD_SYSIRQ:
 						ioData = irqStatus;
 						irqStatus = 0;
+						break;
+					case OP_SPP_RD_READ:
+						if (hasSPP) {
+							// Set MCP23017 pointer to GPIOA
+                			Wire.beginTransmission(SPP_ADDR);
+                			Wire.write(GPIOA_REG);
+                			Wire.endTransmission();
+                
+                			// Read GPIOA (SPP Status Lines)
+                			Wire.beginTransmission(SPP_ADDR);
+                			Wire.requestFrom(GPIOEXP_ADDR, 1);
+                			ioData = Wire.read();
+                			ioData = (ioData & 0b11111000) | 0b00000001;      // Set D0 = 1, D1 = D2 = 0
+						}
 						break;
 					default:
 						break;

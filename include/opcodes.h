@@ -31,8 +31,6 @@
 // TODO Possible OpCodes to suspend the main CPU to allow add-on cards with
 // other CPUs on them to run? Or allow switching back-and-forth?
 
-// TODO OpCodes for R/W SPP add-on board
-
 /**
  * @brief Write USER LED. If Bit 7 (PIN_D0) is HIGH, then LED is ON.
  */
@@ -380,6 +378,33 @@
  * in order to re-enable the Z80 IRQ again.
  */
 #define OP_IO_RD_SYSIRQ 0x89
+
+/**
+ * @brief Initializes the CyBorg SPP card. This OpCode is ignored if SPP card is not present.
+ * This OpCode peforms the following procedures:
+ * - Configure onboard MCP23017 to operate as SPP.
+ * - The STROBE (active low) Control Line of the SPP port is set to High;
+ * - D0 is used to set the status of AUTOFD (active Low) Control Line of the SPP port (AUTOFD = !D0);
+ * - The printer is initialized with a pulse on the INIT (active Low) Control line of the SPP port.
+ */
+#define OP_SPP_WR_INIT 0x11
+
+/**
+ * @brief Sends a byte to the printer attached to the SPP port. This OpCode is ignored if SPP card
+ * is not present. No check is done here to know if the printer is ready or not, so you have to use the
+ * OP_SPP_RD_READ OpCode before for that.
+ * 
+ * NOTE: to use OP_SPP_WR_WRITE the OP_SPP_WR_INIT OpCode should be called first to init the SPP card.
+ */
+#define OP_SPP_WR_WRITE 0x12
+
+/**
+ * @brief Read the Status Lines of the SPP Port and the SPP emulation status. This OpCode is
+ * ignored if the SPP card is not present.
+ * 
+ * NOTE: The SPP must be initialized first using OP_SPP_WR_INIT.
+ */
+#define OP_SPP_RD_READ 0x8A
 
 /**
  * @brief Reserved as No-Op.
