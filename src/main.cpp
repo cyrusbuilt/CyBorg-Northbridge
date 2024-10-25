@@ -1156,7 +1156,7 @@ void loop() {
 						ioData = biosSettings_t.autoExecFlag
 							| ((byte)hasRTC << 1)
 							| ((Serial.available() > 0) << 2)
-							| (lastRxIsEmpty << 3);
+							| ((lastRxIsEmpty > 0) << 3);
 						break;
 					case OP_IO_RD_DATTME:
 						if (hasRTC) {

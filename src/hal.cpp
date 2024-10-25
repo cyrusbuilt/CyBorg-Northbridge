@@ -71,7 +71,7 @@ void printBinaryByte(byte value) {
 	}
 }
 
-// TODO This method is unused.
+// TODO This is unused. Do we really need it?
 void serialEvent(bool intFlagUsed) {
 	if ((Serial.available()) && intFlagUsed) {
 		digitalWrite(PIN_INT, LOW);
@@ -104,13 +104,13 @@ byte openSD(const char* fileName) {
 
 byte readSD(void* buffSD, byte* readBytes) {
 	UINT numBytes;
-	byte errCode = pf_read(buffSD, 32, &numBytes);
+	byte errCode = pf_read(buffSD, MAX_SECTORS, &numBytes);
 	*readBytes = (byte)numBytes;
 	return errCode;
 }
 
 byte seekSD(word sectNum) {
-	return pf_lseek((unsigned long)sectNum) << 9;
+	return pf_lseek(((unsigned long)sectNum) << 9);
 }
 
 byte writeSD(void* buffSD, byte* numWrittenBytes) {
