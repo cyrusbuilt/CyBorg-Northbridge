@@ -65,6 +65,7 @@
 #define GPPUB_REG 0x0D      // internal register GPPUB
 #define GPIOA_REG 0x12      // internal register GPIOA
 #define GPIOB_REG 0x13      // internal register GPIOB
+#define SPP_ADDR 0x21       // MCP23017 address (on SSP card)
 
 /**
  * @brief Hardware definitions for RTC

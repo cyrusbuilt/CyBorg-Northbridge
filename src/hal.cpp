@@ -71,6 +71,7 @@ void printBinaryByte(byte value) {
 	}
 }
 
+// TODO This method is unused.
 void serialEvent(bool intFlagUsed) {
 	if ((Serial.available()) && intFlagUsed) {
 		digitalWrite(PIN_INT, LOW);
