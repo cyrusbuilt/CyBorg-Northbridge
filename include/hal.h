@@ -54,6 +54,24 @@
 #define PIN_RUN 23     // PC7 pin 29 - RUN signal from Southbridge
 #define PIN_PC_SPK 10  // PD2 pin 16 - PC Speaker/Beeper
 
+// Pin definitions on the MCP23017
+#define GPA0 0
+#define GPA1 1
+#define GPA2 2
+#define GPA3 3
+#define GPA4 4
+#define GPA5 5
+#define GPA6 6
+#define GPA7 7
+#define GPB0 8
+#define GPB1 9
+#define GPB2 10
+#define GPB3 11
+#define GPB4 12
+#define GPB5 13
+#define GPB6 14
+#define GPB7 15
+
 /**
  * @brief Hardware definitions GPIO expansion
  */
@@ -66,6 +84,7 @@
 #define GPIOA_REG 0x12      // internal register GPIOA
 #define GPIOB_REG 0x13      // internal register GPIOB
 #define SPP_ADDR 0x21       // MCP23017 address (on SSP card)
+#define BUSCTLR_ADDR 0x22	// MCP23017 address (BUSCTLR)
 
 /**
  * @brief Hardware definitions for RTC

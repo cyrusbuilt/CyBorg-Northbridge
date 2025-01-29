@@ -364,12 +364,12 @@
  * The /INT signal is shared among various interrupt requests. This allows the
  * use of the simplified "Mode 1" scheme of the Z80 CPU (fixed jump to 0x0038 on
  * /INT signal active) with multiple interrupt causes. The SYSIRQ purpose is to
- * all the Z80 CPU to know the exact causes of the interrupt reading the
+ * allow the Z80 CPU to know the exact causes of the interrupt reading the
  * "Interrupt Status Byte" that contains up to eight "Interrupt Status Bits".
  * So the ISR (Interrupt Service Routine) should be structured to first read
  * the "Interrupt Status Byte" using the SYSIRQ OpCode, then execute the needed
  * actions before returning to normal execution. Note multiple causes/bits
- * bould be active.
+ * could be active.
  * 
  * NOTE: Only D0 and D1 "Interrupt Status Bits" are currently used.
  * NOTE: After the SYSIRQ call, all the "Interrupt Status Bits" are cleared.
@@ -411,7 +411,8 @@
  */
 #define OP_IO_NOP 0xFF
 
-// TODO Eventually introduce OpCodes for interracting with southbridge functions (specifically A/V stuff)
+// TODO Eventually introduce OpCodes for interracting with KAMVA functions (specifically A/V stuff)
+// TODO Also opcodes for enabling/disabling slots
 
 /**
  * SD operation types 

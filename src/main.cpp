@@ -2,7 +2,7 @@
  * @file main.cpp
  * @author Chris "Cyrus" Brunner (cyrusbuilt@gmail.com)
  * @brief Firmware for the CyBorg "Northbridge" aka "ViCREM".
- * @version 1.1
+ * @version 1.2
  * @date 2023-05-28
  * 
  * @copyright Copyright (c) Cyrus Brunner 2023
@@ -15,24 +15,24 @@
 
 #include <Arduino.h>
 #include <Wire.h>
-#include "LED.h"
 #include "BiosSettings.h"
 #include "Buzzer.h"
 #include "hal.h"
 #include "iLoad.h"
+#include "LED.h"
 #include "opcodes.h"
 #include "rtc.h"
 #include "ToggleSwitch.h"
+#include "BusControl.h"
+#include "CyBorgSPP.h"
 
-#define FW_VERSION "1.1"
+#define FW_VERSION "1.2"
 
 // Global vars
 DebugMode debug = DebugMode::ON;
 ToggleSwitch runTrigger(PIN_RUN, NULL, NULL);
 HAF_LED iosLED(PIN_IOS_LED, NULL);
 Buzzer pcSpk(PIN_PC_SPK, NULL, NULL);
-bool hasIOExpander = false;
-bool hasSPP = false;
 bool hasRTC = false;
 bool hasExtendedRxBuf = false;
 bool isSlowClock = false;
@@ -62,7 +62,6 @@ byte tempByte = 0;
 byte numWriBytes = 0;
 byte irqStatus = 0;
 byte sysTickTime = 100;
-byte sppAutoFd = 0;
 bool showBootMenu = false;
 
 void initSerial() {
@@ -123,9 +122,13 @@ bool checkUserButton() {
 	Serial.println(F("INIT: boot1 - Checking USER button..."));
 	#endif
 	pinMode(PIN_USER, INPUT_PULLUP);
+	#ifdef DEBUG
 	Serial.print(F("DEBUG: User button state: "));
+	#endif
 	int state = digitalRead(PIN_USER);
+	#ifdef DEBUG
 	Serial.println(state);
+	#endif
 	return (state == LOW);
 }
 
@@ -202,8 +205,10 @@ void bootStage1() {
 
 	initSpeaker();
 	showBootMenu = checkUserButton();
+	#ifdef DEBUG
 	Serial.print(F("DEBUG: Show boot menu: "));
 	Serial.println(showBootMenu);
+	#endif
 	initSystemControl();
 }
 
@@ -284,7 +289,7 @@ void loadBiosSettings() {
 	#endif
 }
 
-void initBusExpander() {
+void initI2C() {
 	#ifdef DEBUG
 	Serial.print(F("INIT: boot3 - Initializing I2C bus... "));
 	#endif
@@ -292,27 +297,44 @@ void initBusExpander() {
 	#ifdef DEBUG
 	Serial.println(F("DONE"));
 	#endif
-	// TODO implement a software reset of the I/O expander by first instructing
-	// KAMVA to cycle the /RESET pin on the MCP23017 and then we need re-init
-	// I2C communication with it. But first, we need a way to send a command
-	// to KAMVA for this *and* an OpCode for our virtual I/O engine to process.
-	Wire.beginTransmission(GPIOEXP_ADDR);
-	hasIOExpander = (Wire.endTransmission() == 0);
-	#ifdef DEBUG
-	if (hasIOExpander) {
-		Serial.println(F("INIT: boot3 - IOS: Found I/O Expander."));
+}
+
+void initBusController() {
+	BusControl.init();
+	if (!BusControl.hasBUSCTLR()) {
+		return;
 	}
-	#endif
+
+	Serial.println(F("INIT: boot3 - IOS: Detecting installed cards ..."));
+	BusControl.detectCards();
+	for (uint8_t i = 1; i < 4; i++) {
+		bool detected = false;
+		switch (i) {
+			case 1:
+				detected = BusControl.card1Present();
+				break;
+			case 2:
+				detected = BusControl.card2Present();
+				break;
+			case 3:
+				detected = BusControl.card3Present();
+				break;
+			default:
+				break;
+		}
+
+		if (detected) {
+			Serial.printf(F("INIT: Card in slot "));
+			Serial.print(i);
+			Serial.println(F(" present"));
+		}
+	}
 }
 
 void detectParallelPort() {
-	Wire.beginTransmission(SPP_ADDR);
-	hasSPP = (Wire.endTransmission() == 0);
-	#ifdef DEBUG
-	if (hasSPP) {
-		Serial.println(F("INIT: boot3 - IOS: Found Standard Parallel Port card"));
+	if (BusControl.hasBUSCTLR() && !BusControl.noCardsPresent()) {
+		CyBorgSPP.detect();
 	}
-	#endif
 }
 
 void bootStage3() {
@@ -320,8 +342,8 @@ void bootStage3() {
 	Serial.println(F("INIT: Boot stage 3."));
 	#endif
 	loadBiosSettings();
-	initBusExpander();
 	hasRTC = RTC.autoSet();
+	initBusController();
 	detectParallelPort();
 }
 
@@ -656,6 +678,7 @@ void bootStage4() {
 		if (biosSettings_t.enableStartupJingle) {
 			playStartupJingle();
 		}
+		
 		Serial.println();
 		Serial.println(F("INIT: boot4 - IOS: Select boot mode or system parameters:"));
 		Serial.println();
@@ -723,8 +746,10 @@ void bootStage4() {
 		}
 	}
 
+	#ifdef DEBUG
 	Serial.print(F("DEBUG: BIOS boot mode: "));
 	Serial.println((uint8_t)biosSettings_t.bootMode);
+	#endif
 
 	if (biosSettings_t.bootMode == BootMode::OS_ON_SD) {
 		Serial.print(F("INIT: boot4 - IOS: Current "));
@@ -864,58 +889,28 @@ void loop() {
 				// EXECUTE opcode
 				switch (ioOpCode) {
 					case OP_IO_WR_USR_LED:
-						digitalWrite(PIN_USER, (ioData & 0x01) ? LOW : HIGH);
+						digitalWrite(PIN_USER, (ioData & B00000001) ? LOW : HIGH);
 						break;
 					case OP_IO_WR_SER_TX:
 						Serial.write(ioData);
 						break;
 					case OP_IO_WR_GPIOA:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPIOA_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeGPIOA(ioData);
 						break;
 					case OP_IO_WR_GPIOB:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPIOB_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeGPIOB(ioData);
 						break;
 					case OP_IO_WR_IODIRA:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(IODIRA_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeIODirA(ioData);
 						break;
 					case OP_IO_WR_IODIRB:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(IODIRB_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeIODirB(ioData);
 						break;
 					case OP_IO_WR_GPPUA:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPPUA_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeGPPUA(ioData);
 						break;
 					case OP_IO_WR_GPPUB:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPPUB_REG);
-							Wire.write(ioData);
-							Wire.endTransmission();
-						}
+						BusControl.writeGPPUB(ioData);
 						break;
 					case OP_IO_WR_SELDSK:
 						if (ioData <= MAX_DISK_NUM) {
@@ -946,8 +941,8 @@ void loop() {
 								else {
 									diskErr = ERR_DSK_EMU_ILLEGAL_SCT_NUM;
 								}
-								ioOpCode = OP_IO_NOP;
 							}
+							ioOpCode = OP_IO_NOP;
 						}
 
 						ioByteCount++;
@@ -1031,66 +1026,11 @@ void loop() {
 						pcSpk.off();
 						break;
 					case OP_SPP_WR_INIT:
-						if (hasSPP) {
-							sppAutoFd = (!ioData) & 0x01;  // Store the value of the AUTOFD Control Line (active Low))
-
-							// Set STROBE and INIT at 1, and AUTOFD = !D0
-							Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(GPIOA_REG);              // Select GPIOA
-              				Wire.write(0b00000101 | (byte) (sppAutoFd << 1)); // Write value
-              				Wire.endTransmission();
-
-							// Set the GPIO port to work as an SPP port (direction and pullup)
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(IODIRA_REG);             // Select IODIRA
-              				Wire.write(0b11111000);             // Write value (1 = input, 0 = ouput)
-              				Wire.endTransmission();
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(IODIRB_REG);             // Select IODIRB 
-              				Wire.write(0b00000000);             // Write value (1 = input, 0 = ouput)
-              				Wire.endTransmission();
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(GPPUA_REG);              // Select GPPUA
-              				Wire.write(0b11111111);             // Write value (1 = pullup enabled, 0 = pullup disabled)
-              				Wire.endTransmission();
-
-							// Initialize the printer using a pulse on INIT
-              				// NOTE: The I2C protocol introduces delays greater than needed by the SPP, so no further delay is used here to generate the pulse
-              				tempByte = 0b00000001 | (byte) (sppAutoFd << 1);  // Change INIT bit to active (Low)
-             				Wire.beginTransmission(GPIOEXP_ADDR);
-              				Wire.write(GPIOA_REG);              // Select GPIOA
-              				Wire.write(tempByte);               // Set INIT bit to active (Low)
-              				Wire.endTransmission();
-
-              				tempByte = tempByte | 0b00000100;   // Change INIT bit to not active (High)
-              				Wire.beginTransmission(GPIOEXP_ADDR);
-              				Wire.write(GPIOA_REG);              // Select GPIOA
-              				Wire.write(tempByte);               // Set INIT bit to not active (High)
-              				Wire.endTransmission();
-						}
+						CyBorgSPP.init(ioData);
 						break;
 					case OP_SPP_WR_WRITE:
-						if (hasSPP) {
-							// NOTE: The I2C protocol introduces delays greater than needed by the SPP, so no further delay is used here to generate the pulse
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(GPIOB_REG);              // Select GPIOB
-              				Wire.write(ioData);                 // Data on GPIOB
-              				Wire.endTransmission();
-
-              				tempByte = 0b11111100 | (byte) (sppAutoFd << 1);  // Change STROBE bit to active (Low)
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(GPIOA_REG);              // Select GPIOA
-              				Wire.write(tempByte);               // Set STROBE bit to active (Low)
-              				Wire.endTransmission();
-
-              				tempByte = tempByte | 0b00000001;   // Change STROBE bit to not active (High)
-              				Wire.beginTransmission(SPP_ADDR);
-              				Wire.write(GPIOA_REG);              // Select GPIOA
-              				Wire.write(tempByte);               // Set STROBE bit to not active (High)
-              				Wire.endTransmission();
-						}
+						CyBorgSPP.write(ioData);
 						break;
-					// TODO process opcode for resetting the IOEXP
 					default:
 						break;
 				}
@@ -1131,25 +1071,13 @@ void loop() {
 						digitalWrite(PIN_USER, tempByte);
 						break;
 					case OP_IO_RD_GPIOA:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPIOA_REG);
-							Wire.endTransmission();
-
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.requestFrom(GPIOEXP_ADDR, 1);
-							ioData = Wire.read();
+						if (BusControl.hasIOEXP()) {
+							ioData = BusControl.readGPIOA();
 						}
 						break;
 					case OP_IO_RD_GPIOB:
-						if (hasIOExpander) {
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.write(GPIOB_REG);
-							Wire.endTransmission();
-
-							Wire.beginTransmission(GPIOEXP_ADDR);
-							Wire.requestFrom(GPIOEXP_ADDR, 1);
-							ioData = Wire.read();
+						if (BusControl.hasIOEXP()) {
+							ioData = BusControl.readGPIOB();
 						}
 						break;
 					case OP_IO_RD_SYSFLG:
@@ -1240,17 +1168,8 @@ void loop() {
 						irqStatus = 0;
 						break;
 					case OP_SPP_RD_READ:
-						if (hasSPP) {
-							// Set MCP23017 pointer to GPIOA
-                			Wire.beginTransmission(SPP_ADDR);
-                			Wire.write(GPIOA_REG);
-                			Wire.endTransmission();
-                
-                			// Read GPIOA (SPP Status Lines)
-                			Wire.beginTransmission(SPP_ADDR);
-                			Wire.requestFrom(GPIOEXP_ADDR, 1);
-                			ioData = Wire.read();
-                			ioData = (ioData & 0b11111000) | 0b00000001;      // Set D0 = 1, D1 = D2 = 0
+						if (CyBorgSPP.isPresent()) {
+							ioData = CyBorgSPP.read();
 						}
 						break;
 					default:
